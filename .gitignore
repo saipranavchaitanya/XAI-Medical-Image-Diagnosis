@@ -1,0 +1,67 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# VS Code
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Python packaging
+*.egg-info/
+dist/
+build/
+
+# Logs
+*.log
+
+# Local datasets
+datasets/
+data/
+
+# Research experiment outputs
+artifacts/covid/final_results/
+artifacts/covid/faithfulness/
+artifacts/covid/consistency/
+artifacts/covid/failure_analysis/
+artifacts/covid/sfmov/comparison/
+artifacts/covid/sfmov/original/
+artifacts/covid/sfmov/improved/
+artifacts/covid/sfmov/spatial/
+artifacts/covid/sfmov/spatial_corrected/
+
+# Large experiment files
+*.npy
+*.npz
+*.csv
+*.pkl
+
+# Keep the deployment rule model
+!artifacts/
+!artifacts/covid/
+!artifacts/covid/rule_fidelity/
+!artifacts/covid/rule_fidelity/best_rule_fidelity_tree.pkl
+
+# Keep the trained deployment model
+!models/
+!models/covid_baseline_mobilenetv2.keras
+
+# Local test images
+COVID-1.png
+
+# Temporary files
+*.tmp
+*.temp
+evaluate_spatial_sfmov.py
+fix_spatial_sfmov.py

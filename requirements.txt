@@ -1,0 +1,9 @@
+tensorflow>=2.20,<2.21
+numpy
+pandas
+scipy
+scikit-image
+pillow
+matplotlib
+streamlit
+scikit-learn==1.6.1
