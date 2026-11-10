@@ -1,0 +1,71 @@
+{
+    "project": {
+        "title": "Explainable Deep Learning Framework for Transparent Medical Image Diagnosis",
+        "dataset_count": 5
+    },
+    "datasets": {
+        "covid19": {
+            "name": "COVID-19 Radiography Database",
+            "source_path": "/kaggle/input/covid19-radiography-database",
+            "classes": [
+                "Normal",
+                "COVID",
+                "Lung_Opacity",
+                "Viral Pneumonia"
+            ],
+            "expected_total": 21165,
+            "format": "PNG",
+            "modality": "Chest X-ray"
+        },
+        "breast_ultrasound": {
+            "name": "Ultrasound Breast Images for Breast Cancer",
+            "source_path": "/root/.cache/kagglehub/datasets/vuppalaadithyasairam/ultrasound-breast-images-for-breast-cancer/versions/1",
+            "root_subfolder": "ultrasound breast classification",
+            "classes": [
+                "benign",
+                "malignant"
+            ],
+            "expected_total": 9016,
+            "format": "PNG/JPG",
+            "modality": "Ultrasound"
+        },
+        "bttypes": {
+            "name": "BTTypes",
+            "source_path": "/root/.cache/kagglehub/datasets/umarsiddiqui9/bttypes/versions/2",
+            "classes": [
+                "Benign",
+                "Malignant"
+            ],
+            "expected_total": 2400,
+            "format": "PNG",
+            "modality": "Brain MRI"
+        },
+        "lung_colon": {
+            "name": "Lung and Colon Cancer Histopathological Images",
+            "source_path": "/kaggle/input/lung-and-colon-cancer-histopathological-images",
+            "root_subfolder": "lung_colon_image_set",
+            "classes": [
+                "colon_aca",
+                "colon_n",
+                "lung_aca",
+                "lung_scc",
+                "lung_n"
+            ],
+            "expected_total": 25000,
+            "format": "JPEG",
+            "modality": "Histopathology"
+        },
+        "acrima": {
+            "name": "ACRIMA",
+            "source_path": "/root/.cache/kagglehub/datasets/hindsaud/datasets-higancnn-glaucoma-detection/versions/1",
+            "root_subfolder": "Datasets/Acrima",
+            "classes": [
+                "Glaucoma",
+                "Normal"
+            ],
+            "expected_total": 6000,
+            "format": "PNG",
+            "modality": "Retinal Fundus"
+        }
+    }
+}
