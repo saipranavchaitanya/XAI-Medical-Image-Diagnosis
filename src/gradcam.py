@@ -2,6 +2,7 @@ import tensorflow as tf
 import numpy as np
 
 
+
 def make_gradcam_heatmap(
     image_array,
     model,
@@ -9,86 +10,99 @@ def make_gradcam_heatmap(
     pred_index=None
 ):
     """
-    Generate a Grad-CAM heatmap for a single input image.
-
-    Parameters
-    ----------
-    image_array : numpy.ndarray
-        Preprocessed image with shape (1, 224, 224, 3).
-
-    model : tf.keras.Model
-        Trained classification model.
-
-    last_conv_layer_name : str
-        Convolutional feature layer used for Grad-CAM.
-
-    pred_index : int or None
-        Target class index. If None, uses the predicted class.
-
-    Returns
-    -------
-    heatmap : numpy.ndarray
-        Normalized Grad-CAM heatmap with values in [0, 1].
-
-    predicted_index : int
-        Class index used for Grad-CAM.
+    Generate Grad-CAM for both nested and non-nested models.
     """
 
-    # Create a model that returns:
-    # 1. Feature maps from the selected convolutional layer
-    # 2. Final model predictions
-    grad_model = tf.keras.models.Model(
-        inputs=model.inputs,
-        outputs=[
-            model.get_layer(last_conv_layer_name).output,
-            model.output
-        ]
-    )
+    # Find a nested backbone containing the target layer.
+    backbone = None
 
-    # Calculate gradients
-    with tf.GradientTape() as tape:
+    for layer in model.layers:
+        if isinstance(layer, tf.keras.Model):
+            if any(
+                sublayer.name == last_conv_layer_name
+                for sublayer in layer.layers
+            ):
+                backbone = layer
+                break
 
-        conv_outputs, predictions = grad_model(
-            image_array,
-            training=False
+    if backbone is not None:
+        # Extract intermediate feature maps and backbone output.
+        target_layer = backbone.get_layer(last_conv_layer_name)
+
+        feature_model = tf.keras.Model(
+            inputs=backbone.input,
+            outputs=[
+                target_layer.output,
+                backbone.output
+            ]
         )
 
-        if pred_index is None:
-            pred_index = tf.argmax(
-                predictions[0]
+        # Build classifier head after the nested backbone.
+        backbone_position = model.layers.index(backbone)
+
+        head_layers = model.layers[backbone_position + 1:]
+
+        def classify(features):
+            x = features
+            for layer in head_layers:
+                x = layer(x)
+            return x
+
+        with tf.GradientTape() as tape:
+            conv_outputs, backbone_features = feature_model(
+                image_array,
+                training=False
             )
 
-        class_score = predictions[:, pred_index]
+            predictions = classify(backbone_features)
 
-    # Gradient of class score with respect to feature maps
-    grads = tape.gradient(
-        class_score,
-        conv_outputs
-    )
+            if pred_index is None:
+                pred_index = int(
+                    tf.argmax(predictions[0]).numpy()
+                )
 
-    # Global average pooling of gradients
-    pooled_grads = tf.reduce_mean(
-        grads,
-        axis=(1, 2)
-    )
+            class_score = predictions[:, pred_index]
 
-    # Remove batch dimension
+    else:
+        # Original architecture: target layer at model level.
+        target_layer = model.get_layer(last_conv_layer_name)
+
+        grad_model = tf.keras.models.Model(
+            inputs=model.inputs,
+            outputs=[target_layer.output, model.output]
+        )
+
+        with tf.GradientTape() as tape:
+            conv_outputs, predictions = grad_model(
+                image_array,
+                training=False
+            )
+
+            if pred_index is None:
+                pred_index = int(
+                    tf.argmax(predictions[0]).numpy()
+                )
+
+            class_score = predictions[:, pred_index]
+
+    # Calculate gradients.
+    grads = tape.gradient(class_score, conv_outputs)
+
+    if grads is None:
+        raise RuntimeError("Grad-CAM gradients could not be calculated.")
+
+    pooled_grads = tf.reduce_mean(grads, axis=(1, 2))
+
     conv_outputs = conv_outputs[0]
     pooled_grads = pooled_grads[0]
 
-    # Weight feature maps by the importance of each channel
     heatmap = tf.reduce_sum(
         conv_outputs * pooled_grads,
         axis=-1
     )
 
-    # ReLU: retain positive influence
-    heatmap = tf.maximum(
-        heatmap,
-        0
-    )
+    heatmap = tf.maximum(heatmap, 0)
 
-    # Normalize to [0, 1]
     max_value = tf.reduce_max(heatmap)
 
     heatmap = tf.where(

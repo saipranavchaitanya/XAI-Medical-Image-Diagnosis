@@ -13,6 +13,9 @@ from skimage.metrics import structural_similarity as ssim
 from src.prediction import DATASET_CONFIG, get_available_datasets, get_model
 from src.statistical_features import calculate_features, FEATURE_NAMES
 from src.sfmov import create_original_sfmov
+from src.faithfulness import evaluate_faithfulness
+from src.stability import evaluate_stability
+from src.sensitivity import evaluate_sensitivity
 
 
 # ============================================================
@@ -190,6 +193,104 @@ if selected_dataset == "lung_colon":
         "src/prediction.py. Its original training class-index mapping "
         "has not yet been independently verified against training metadata."
     )
+
+# ============================================================
+# DATASET-LEVEL EXPERIMENTAL RESULTS
+# ============================================================
+
+
+# ============================================================
+# DATASET-LEVEL EXPERIMENTAL RESULTS
+# ============================================================
+
+st.divider()
+
+st.header("Dataset-Level Experimental Results")
+
+dataset_result_files = {
+    "acrima": os.path.join(
+        PROJECT_ROOT,
+        "artifacts",
+        "acrima",
+        "quantitative_evaluation",
+        "acrima_statistical_summary.csv"
+    )
+}
+
+results_path = dataset_result_files.get(selected_dataset)
+
+if results_path and os.path.exists(results_path):
+
+    results_df = pd.read_csv(results_path)
+
+    sample_count = int(results_df["sample_count"].iloc[0])
+
+    st.success(
+        f"{selected_dataset_label}: Results available for "
+        f"{sample_count} test images."
+    )
+
+    st.subheader("Mean Evaluation Scores")
+
+    display_metrics = {
+        "Deletion AUC": "deletion_auc",
+        "Insertion AUC": "insertion_auc",
+        "Pearson Correlation": "mean_pearson",
+        "SSIM": "mean_ssim",
+        "Top-20% IoU": "mean_top_20_iou",
+        "Sensitivity Difference": "sensitivity_difference"
+    }
+
+    metric_cols = st.columns(3)
+
+    for index, (label, metric_name) in enumerate(display_metrics.items()):
+
+        matching_rows = results_df.loc[
+            results_df["metric"] == metric_name,
+            "mean"
+        ]
+
+        if not matching_rows.empty:
+
+            with metric_cols[index % 3]:
+
+                st.metric(
+                    label,
+                    f"{matching_rows.iloc[0]:.4f}"
+                )
+
+    st.subheader("Complete Statistical Results")
+
+    st.dataframe(
+        results_df.style.format({
+            "mean": "{:.4f}",
+            "standard_deviation": "{:.4f}",
+            "95%_CI_lower": "{:.4f}",
+            "95%_CI_upper": "{:.4f}"
+        }),
+        use_container_width=True,
+        hide_index=True
+    )
+
+    st.download_button(
+        "Download Dataset Results (CSV)",
+        data=results_df.to_csv(index=False).encode("utf-8"),
+        file_name=f"{selected_dataset}_evaluation_results.csv",
+        mime="text/csv"
+    )
+
+else:
+
+    st.info(
+        f"Quantitative dataset-level reliability results "
+        f"have not yet been added for {selected_dataset_label}."
+    )
+
+    st.caption(
+        "Results will appear here after the corresponding "
+        "dataset-level evaluation has been completed."
+    )
+
 
 
 # ============================================================
@@ -890,6 +991,174 @@ with col3:
         gradcam_overlay,
         clear_figure=True,
     )
+
+# ============================================================
+# QUANTITATIVE EXPLANATION RELIABILITY EVALUATION
+# ============================================================
+
+st.subheader("4. Quantitative Explanation Reliability Evaluation")
+
+
+def generate_explanation_for_image(pil_image):
+    processed = preprocess_input_image(pil_image)
+
+    return generate_gradcam_map(
+        processed,
+        predicted_index,
+        gradcam_model
+    )
+
+
+def predict_probabilities_for_image(pil_image):
+    processed = preprocess_input_image(pil_image)
+
+    return np.asarray(
+        model.predict(processed, verbose=0)
+    )[0]
+
+
+st.markdown("### Evaluate Explanation Reliability")
+
+st.info(
+    "Click the button below to evaluate the faithfulness, "
+    "stability, and sensitivity of the Grad-CAM explanation."
+)
+
+if st.button(
+    "🔬 RUN EXPLANATION RELIABILITY EVALUATION",
+    type="primary",
+    use_container_width=True
+):
+
+    try:
+        with st.spinner("Evaluating explanation reliability..."):
+
+            # 1. Faithfulness Evaluation
+            faithfulness_results = evaluate_faithfulness(
+                model=model,
+                original_image=image,
+                explanation_map=gradcam_map,
+                target_class_index=predicted_index,
+                preprocess_fn=preprocess_input_image,
+                steps=10,
+                random_runs=3
+            )
+
+            # 2. Stability Evaluation
+            stability_results = evaluate_stability(
+                image=image,
+                generate_explanation=generate_explanation_for_image,
+                num_perturbations=5
+            )
+
+            # 3. Sensitivity Evaluation
+            sensitivity_results = evaluate_sensitivity(
+                image=image,
+                explanation_map=gradcam_map,
+                predict_function=predict_probabilities_for_image,
+                target_class_index=predicted_index,
+                percentile=80
+            )
+
+        st.success("Reliability evaluation completed!")
+
+        # 1. Faithfulness Results
+        st.markdown("### 1. Faithfulness Evaluation")
+
+        faithfulness_metrics = {
+            "Deletion AUC": faithfulness_results["deletion_auc"],
+            "Insertion AUC": faithfulness_results["insertion_auc"],
+            "Random Deletion AUC": faithfulness_results["random_deletion_auc"],
+            "Random Insertion AUC": faithfulness_results["random_insertion_auc"],
+            "Deletion Advantage": faithfulness_results["deletion_advantage"],
+            "Insertion Advantage": faithfulness_results["insertion_advantage"]
+        }
+
+        st.dataframe(
+            pd.DataFrame(
+                list(faithfulness_metrics.items()),
+                columns=["Metric", "Value"]
+            ).style.format({"Value": "{:.4f}"}),
+            use_container_width=True,
+            hide_index=True
+        )
+
+        # 2. Stability Results
+        st.markdown("### 2. Explanation Stability Evaluation")
+
+        stability_summary = stability_results["summary"]
+
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.metric(
+                "Pearson Correlation",
+                f"{stability_summary['mean_pearson']:.4f}"
+            )
+
+        with col2:
+            st.metric(
+                "SSIM",
+                f"{stability_summary['mean_ssim']:.4f}"
+            )
+
+        with col3:
+            st.metric(
+                "Top-20% IoU",
+                f"{stability_summary['mean_top_20_iou']:.4f}"
+            )
+
+        # 3. Sensitivity Results
+        st.markdown("### 3. Explanation Sensitivity Evaluation")
+
+        sensitivity_metrics = {
+            "Original Confidence": sensitivity_results["original_confidence"],
+            "Salient Confidence Drop": sensitivity_results["salient_confidence_drop"],
+            "Non-Salient Confidence Drop": sensitivity_results["non_salient_confidence_drop"],
+            "Sensitivity Difference": sensitivity_results["sensitivity_difference"]
+        }
+
+        st.dataframe(
+            pd.DataFrame(
+                list(sensitivity_metrics.items()),
+                columns=["Metric", "Value"]
+            ).style.format({"Value": "{:.4f}"}),
+            use_container_width=True,
+            hide_index=True
+        )
+
+        # 4. Export Evaluation Results
+        all_evaluation_metrics = {}
+
+        all_evaluation_metrics.update(faithfulness_metrics)
+
+        all_evaluation_metrics.update({
+            "Mean Pearson Correlation": stability_summary["mean_pearson"],
+            "Mean SSIM": stability_summary["mean_ssim"],
+            "Mean Top-20% IoU": stability_summary["mean_top_20_iou"]
+        })
+
+        all_evaluation_metrics.update(sensitivity_metrics)
+
+        evaluation_df = pd.DataFrame(
+            list(all_evaluation_metrics.items()),
+            columns=["Metric", "Value"]
+        )
+
+        csv_data = evaluation_df.to_csv(index=False).encode("utf-8")
+
+        st.download_button(
+            label="📥 Download Evaluation Results (CSV)",
+            data=csv_data,
+            file_name="explanation_reliability_results.csv",
+            mime="text/csv",
+            type="primary",
+            use_container_width=True
+        )
+
+    except Exception as error:
+        st.error("Reliability evaluation failed.")
+        st.exception(error)
 
 
 # ============================================================

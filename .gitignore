@@ -59,3 +59,7 @@ models/*
 !models/bttypes_mobilenetv2_best.keras
 !models/lung_colon_mobilenetv2_best.keras
 !models/acrima_mobilenetv2_best.keras
+# Include ACRIMA quantitative evaluation results
+!artifacts/acrima/
+!artifacts/acrima/quantitative_evaluation/
+!artifacts/acrima/quantitative_evaluation/acrima_statistical_summary.csv
